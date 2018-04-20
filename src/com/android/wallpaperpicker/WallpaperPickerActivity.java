@@ -22,6 +22,7 @@ import android.app.Activity;
 import android.content.Intent;
 import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageManager;
+import android.content.pm.ResolveInfo;
 import android.content.res.Resources;
 import android.net.Uri;
 import android.os.Bundle;
@@ -62,6 +63,10 @@ public class WallpaperPickerActivity extends WallpaperCropActivity
     private static final String TEMP_WALLPAPER_TILES = "TEMP_WALLPAPER_TILES";
     private static final String SELECTED_INDEX = "SELECTED_INDEX";
     private static final int FLAG_POST_DELAY_MILLIS = 200;
+
+    private static final String ACTION_PARTNER_CUSTOMIZATION =
+            "com.android.launcher3.action.PARTNER_CUSTOMIZATION";
+    private static final String PARTNER_WALLPAPERS = "partner_wallpapers";
 
     private View mSelectedTile;
 
@@ -427,6 +432,17 @@ public class WallpaperPickerActivity extends WallpaperCropActivity
 
     public ArrayList<WallpaperTileInfo> findBundledWallpapers() {
         final ArrayList<WallpaperTileInfo> bundled = new ArrayList<WallpaperTileInfo>(24);
+
+        List<Pair<String, Resources>> apkInfos = findSystemApks();
+        for (Pair<String, Resources> apkInfo : apkInfos) {
+            final int resId = apkInfo.second.getIdentifier(PARTNER_WALLPAPERS, "array",
+                    apkInfo.first);
+            if (resId != 0) {
+                addWallpapers(bundled, apkInfo.second, apkInfo.first, resId);
+            }
+
+        }
+
         Pair<ApplicationInfo, Integer> r = getWallpaperArrayResourceId();
         if (r != null) {
             try {
@@ -442,6 +458,26 @@ public class WallpaperPickerActivity extends WallpaperCropActivity
             bundled.add(0, defaultWallpaperInfo);
         }
         return bundled;
+    }
+
+    // Based of Launcher3:
+    // com.android.launcher3.Utilities
+    private List<Pair<String, Resources>> findSystemApks() {
+        final Intent intent = new Intent(ACTION_PARTNER_CUSTOMIZATION);
+        List<Pair<String, Resources>> systemApks = new ArrayList<Pair<String, Resources>>();
+        for (ResolveInfo info : getPackageManager().queryBroadcastReceivers(intent, 0)) {
+            if (info.activityInfo != null &&
+                    (info.activityInfo.applicationInfo.flags & ApplicationInfo.FLAG_SYSTEM) != 0) {
+                final String packageName = info.activityInfo.packageName;
+                try {
+                    final Resources res = getPackageManager().getResourcesForApplication(packageName);
+                    systemApks.add(Pair.create(packageName, res));
+                } catch (PackageManager.NameNotFoundException e) {
+                    Log.w(TAG, "Failed to find resources for " + packageName);
+                }
+            }
+        }
+        return systemApks;
     }
 
     public Pair<ApplicationInfo, Integer> getWallpaperArrayResourceId() {
